@@ -1,8 +1,23 @@
 # Herald Bundle for Symfony
 
-Official Symfony bundle for integrating with [Herald](https://herald-ai.net), the multi-agent orchestration engine.
+Official Symfony bundle for [Herald](https://herald-ai.net), the multi-agent orchestration engine.
 
-Send a message to your agent stack, receive the AI response via webhook.
+## How it works
+
+```
+Your app                        Herald
+   |                              |
+   |--- sendMessage() ----------->|  1. You send a user message
+   |<-- conversationId -----------|  2. Herald returns an ID immediately
+   |                              |
+   |   (agents process the message asynchronously)
+   |                              |
+   |<-- webhook: started ---------|  3. Herald notifies you at each step
+   |<-- webhook: completed -------|  4. Final response arrives with the AI answer
+   |                              |
+```
+
+Herald processes messages **asynchronously**. Your app sends a message, gets a conversation ID back instantly, and then receives updates via webhooks as the AI agents work.
 
 ## Installation
 
@@ -12,6 +27,8 @@ composer require herald-ai/herald-bundle
 
 ## Configuration
 
+Add your Herald API credentials:
+
 ```yaml
 # config/packages/herald.yaml
 herald:
@@ -19,9 +36,11 @@ herald:
   api_key: '%env(HERALD_API_KEY)%'
 ```
 
-## Usage
+## Quick start
 
-### Send a message
+### 1. Send a message
+
+Inject `HeraldClient` and call `sendMessage()`. The call returns immediately with a conversation ID.
 
 ```php
 use Herald\Bundle\Client\HeraldClient;
@@ -39,12 +58,35 @@ final readonly class MyService
             message: $question,
         );
 
+        // Save this ID to match with the webhook response later
         return $response->conversationId;
     }
 }
 ```
 
-### Receive responses via webhook
+You can also pass **context** and **tracking data**:
+
+```php
+$response = $this->heraldClient->sendMessage(
+    endpointId: 'your-endpoint-id',
+    message: 'How can I help you?',
+    systemMessages: [                          // Injected into the AI context
+        'You are a support agent for Acme Corp.',
+        'The customer is on the Pro plan.',
+    ],
+    metadata: [                                // Returned as-is in webhooks
+        'userId' => 'user-123',
+        'source' => 'chat-widget',
+    ],
+);
+```
+
+- **systemMessages**: additional instructions injected into the AI conversation (e.g., user context, business rules)
+- **metadata**: arbitrary key-value data attached to the conversation. Herald does not read it — it simply passes it back in every webhook, so you can correlate responses with your own data.
+
+### 2. Receive the AI response
+
+Herald calls your webhook endpoint as the conversation progresses. The bundle dispatches a Symfony event for each webhook call:
 
 ```php
 use Herald\Bundle\Event\HeraldResponseReceivedEvent;
@@ -55,84 +97,139 @@ final readonly class HeraldListener
 {
     public function __invoke(HeraldResponseReceivedEvent $event): void
     {
-        if ($event->event !== 'conversation.completed') {
-            return;
+        // The AI finished processing — here is the response
+        if ($event->event === 'conversation.completed') {
+            $aiResponse    = $event->response;              // "Here is how I can help..."
+            $conversationId = $event->conversationId;       // Match with your original request
+            $userId        = $event->metadata['userId'];    // Your metadata, passed back as-is
         }
 
-        $response = $event->response;
-        $cost = $event->usage['totalCost'];
-        $model = $event->usage['primaryModel'];
+        // Something went wrong
+        if ($event->event === 'conversation.failed') {
+            $reason = $event->failureReason;                // "Rate limit exceeded"
+        }
     }
 }
 ```
 
-### System messages and metadata
+## Webhook events reference
 
-```php
-$response = $this->heraldClient->sendMessage(
-    endpointId: 'your-endpoint-id',
-    message: 'How can I help you?',
-    systemMessages: [
-        'You are a support agent for Acme Corp.',
-        'The customer is on the Pro plan.',
-    ],
-    metadata: [
-        'userId' => 'user-123',
-        'source' => 'chat-widget',
-    ],
-);
+Herald sends 5 different events during a conversation lifecycle. You will typically only need to handle `completed` and `failed`.
+
+### Lifecycle overview
+
+```
+sendMessage()
+     |
+     v
+  started        The agents began working on your message.
+     |
+     v
+  paused?        (Optional) An agent needs a human decision.
+     |            A team member answers in the Herald inbox.
+     v
+  resumed?       (Optional) Human answered — agents resume.
+     |
+     v
+  completed      Done. The AI response is ready.
+  -- or --
+  failed         Something went wrong.
 ```
 
-Metadata is passed through to webhook events, so you can correlate responses with your application data.
+### Events detail
 
-## Webhook events
+#### `conversation.started`
 
-Herald sends webhook events at each stage of conversation processing. Events fall into two categories with different payloads.
+The agents received your message and began processing. No response yet.
 
-### In-flight events
+```php
+if ($event->event === 'conversation.started') {
+    // You can update your UI: "AI is thinking..."
+    $conversationId = $event->conversationId;
+}
+```
 
-These events are dispatched while the conversation is still being processed. They carry context but no response or usage data.
+#### `conversation.paused`
 
-**`conversation.started`** — The agent stack received the message and began processing.
+An agent escalated the conversation to a human. A team member needs to answer in the Herald inbox before processing can continue.
 
-**`conversation.paused`** — An agent triggered a human-in-the-loop escalation. The conversation is waiting for a human response in the Herald inbox.
+```php
+if ($event->event === 'conversation.paused') {
+    // You can notify the user: "A team member is reviewing your request"
+    $conversationId = $event->conversationId;
+}
+```
 
-**`conversation.resumed`** — A team member answered the escalation. The agent stack resumed processing.
+#### `conversation.resumed`
 
-**In-flight payload fields:**
+A team member answered the escalation. The agents resumed processing.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `$event->event` | `string` | Event type (`conversation.started`, `conversation.paused`, `conversation.resumed`) |
-| `$event->conversationId` | `string` | Unique conversation identifier |
-| `$event->nodeId` | `?string` | ID of the node that triggered the event |
-| `$event->stackId` | `?string` | ID of the agent stack |
-| `$event->stackName` | `?string` | Human-readable stack name |
-| `$event->status` | `string` | Current status (`pending`, `paused`) |
-| `$event->metadata` | `array` | Your metadata passed via `sendMessage()` |
+```php
+if ($event->event === 'conversation.resumed') {
+    // You can update your UI: "AI is processing the answer..."
+    $conversationId = $event->conversationId;
+}
+```
 
-### Terminal events
+#### `conversation.completed`
 
-These events are dispatched when the conversation reaches a final state. They include the full response and token usage statistics.
+The agents finished processing. The AI response and usage statistics are available.
 
-**`conversation.completed`** — The agent stack finished processing. The AI response is available in `$event->response`.
+```php
+if ($event->event === 'conversation.completed') {
+    $event->response;                      // "Here is how I can help..."
+    $event->conversationId;                // "conv_abc123"
+    $event->metadata;                      // ['userId' => 'user-123', ...]
 
-**`conversation.failed`** — Processing failed. The reason is available in `$event->failureReason`.
+    // Usage statistics
+    $event->usage['inputTokens'];          // 1250
+    $event->usage['outputTokens'];         // 340
+    $event->usage['totalCost'];            // "0.0042"  (USD)
+    $event->usage['primaryModel'];         // "claude-sonnet-4-20250514"
+    $event->usage['llmCalls'];             // 3
+    $event->usage['generationTimeMs'];     // 4200
+}
+```
 
-**Terminal payload fields** (all in-flight fields, plus):
+#### `conversation.failed`
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `$event->response` | `?string` | The AI-generated response (null on failure) |
-| `$event->failureReason` | `?string` | Why processing failed (null on success) |
-| `$event->usage['inputTokens']` | `int` | Total input tokens consumed |
-| `$event->usage['outputTokens']` | `int` | Total output tokens generated |
-| `$event->usage['inputCost']` | `?string` | Input cost in USD |
-| `$event->usage['outputCost']` | `?string` | Output cost in USD |
-| `$event->usage['totalCost']` | `?string` | Total cost in USD |
-| `$event->usage['llmCalls']` | `int` | Number of LLM API calls made |
-| `$event->usage['primaryModel']` | `?string` | Main LLM model used |
-| `$event->usage['generationTimeMs']` | `int` | Total processing time in milliseconds |
+Something went wrong during processing.
+
+```php
+if ($event->event === 'conversation.failed') {
+    $event->failureReason;                 // "Rate limit exceeded"
+    $event->conversationId;                // "conv_abc123"
+    $event->metadata;                      // ['userId' => 'user-123', ...]
+}
+```
+
+### All event fields
+
+| Field | Available in | Description |
+|-------|-------------|-------------|
+| `$event->event` | All events | Event name (`conversation.started`, etc.) |
+| `$event->conversationId` | All events | Conversation ID (matches `sendMessage()` return) |
+| `$event->nodeId` | All events | Which agent node triggered this event |
+| `$event->stackId` | All events | Your agent stack ID |
+| `$event->stackName` | All events | Your agent stack name |
+| `$event->status` | All events | Conversation status (`pending`, `paused`, `completed`, `failed`) |
+| `$event->metadata` | All events | Your metadata from `sendMessage()`, returned as-is |
+| `$event->response` | `completed` | The AI-generated response |
+| `$event->failureReason` | `failed` | Why processing failed |
+| `$event->usage` | `completed`, `failed` | Token counts, costs, model info (see table below) |
+
+### Usage statistics
+
+| Field | Type | Example |
+|-------|------|---------|
+| `usage['inputTokens']` | `int` | `1250` |
+| `usage['outputTokens']` | `int` | `340` |
+| `usage['inputCost']` | `?string` | `"0.0031"` |
+| `usage['outputCost']` | `?string` | `"0.0011"` |
+| `usage['totalCost']` | `?string` | `"0.0042"` |
+| `usage['llmCalls']` | `int` | `3` |
+| `usage['primaryModel']` | `?string` | `"claude-sonnet-4-20250514"` |
+| `usage['generationTimeMs']` | `int` | `4200` |
 
 ## Requirements
 
