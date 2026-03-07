@@ -166,9 +166,12 @@ flowchart TD
     F -- Success --> G[conversation.completed]
     F -- Error --> H[conversation.failed]
 
+    style A fill:#312e81,color:#fff
+    style B fill:#1e3a5f,color:#fff
+    style D fill:#92400e,color:#fff
+    style E fill:#1e3a5f,color:#fff
     style G fill:#065f46,color:#fff
     style H fill:#991b1b,color:#fff
-    style D fill:#92400e,color:#fff
 ```
 
 ### Events detail
