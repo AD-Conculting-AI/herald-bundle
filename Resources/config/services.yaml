@@ -1,0 +1,10 @@
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: true
+
+  Herald\Bundle\Client\HeraldClient:
+    arguments:
+      $heraldApiUrl: '%herald.api_url%'
+      $heraldApiKey: '%herald.api_key%'
+      $heraldVerifyPeer: '%herald.verify_peer%'
