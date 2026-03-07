@@ -4,17 +4,18 @@ Official Symfony bundle for [Herald](https://herald-ai.net), the multi-agent orc
 
 ## How it works
 
-```
-Your app                        Herald
-   |                              |
-   |--- sendMessage() ----------->|  1. You send a user message
-   |<-- conversationId -----------|  2. Herald returns an ID immediately
-   |                              |
-   |   (agents process the message asynchronously)
-   |                              |
-   |<-- webhook: started ---------|  3. Herald notifies you at each step
-   |<-- webhook: completed -------|  4. Final response arrives with the AI answer
-   |                              |
+```mermaid
+sequenceDiagram
+    participant App as Your App
+    participant Herald
+
+    App->>Herald: sendMessage("How can I help?")
+    Herald-->>App: conversationId
+
+    Note over Herald: Agents process the message asynchronously
+
+    Herald--)App: webhook: conversation.started
+    Herald--)App: webhook: conversation.completed + AI response
 ```
 
 Herald processes messages **asynchronously**. Your app sends a message, gets a conversation ID back instantly, and then receives updates via webhooks as the AI agents work.
@@ -118,22 +119,20 @@ Herald sends 5 different events during a conversation lifecycle. You will typica
 
 ### Lifecycle overview
 
-```
-sendMessage()
-     |
-     v
-  started        The agents began working on your message.
-     |
-     v
-  paused?        (Optional) An agent needs a human decision.
-     |            A team member answers in the Herald inbox.
-     v
-  resumed?       (Optional) Human answered — agents resume.
-     |
-     v
-  completed      Done. The AI response is ready.
-  -- or --
-  failed         Something went wrong.
+```mermaid
+flowchart TD
+    A[sendMessage] --> B[conversation.started]
+    B --> C{Agent needs human help?}
+    C -- No --> F
+    C -- Yes --> D[conversation.paused]
+    D -- Team member answers --> E[conversation.resumed]
+    E --> F{Processing result}
+    F -- Success --> G[conversation.completed]
+    F -- Error --> H[conversation.failed]
+
+    style G fill:#065f46,color:#fff
+    style H fill:#991b1b,color:#fff
+    style D fill:#92400e,color:#fff
 ```
 
 ### Events detail
