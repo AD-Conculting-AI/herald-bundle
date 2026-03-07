@@ -87,12 +87,52 @@ Metadata is passed through to webhook events, so you can correlate responses wit
 
 ## Webhook events
 
-| Event | Description |
-|-------|-------------|
-| `conversation.started` | Agent stack began processing |
-| `conversation.paused` | Waiting for human-in-the-loop |
-| `conversation.completed` | Final response available in `$event->response` |
-| `conversation.failed` | Processing failed, reason in `$event->failureReason` |
+Herald sends webhook events at each stage of conversation processing. Events fall into two categories with different payloads.
+
+### In-flight events
+
+These events are dispatched while the conversation is still being processed. They carry context but no response or usage data.
+
+**`conversation.started`** — The agent stack received the message and began processing.
+
+**`conversation.paused`** — An agent triggered a human-in-the-loop escalation. The conversation is waiting for a human response in the Herald inbox.
+
+**`conversation.resumed`** — A team member answered the escalation. The agent stack resumed processing.
+
+**In-flight payload fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `$event->event` | `string` | Event type (`conversation.started`, `conversation.paused`, `conversation.resumed`) |
+| `$event->conversationId` | `string` | Unique conversation identifier |
+| `$event->nodeId` | `?string` | ID of the node that triggered the event |
+| `$event->stackId` | `?string` | ID of the agent stack |
+| `$event->stackName` | `?string` | Human-readable stack name |
+| `$event->status` | `string` | Current status (`pending`, `paused`) |
+| `$event->metadata` | `array` | Your metadata passed via `sendMessage()` |
+
+### Terminal events
+
+These events are dispatched when the conversation reaches a final state. They include the full response and token usage statistics.
+
+**`conversation.completed`** — The agent stack finished processing. The AI response is available in `$event->response`.
+
+**`conversation.failed`** — Processing failed. The reason is available in `$event->failureReason`.
+
+**Terminal payload fields** (all in-flight fields, plus):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `$event->response` | `?string` | The AI-generated response (null on failure) |
+| `$event->failureReason` | `?string` | Why processing failed (null on success) |
+| `$event->usage['inputTokens']` | `int` | Total input tokens consumed |
+| `$event->usage['outputTokens']` | `int` | Total output tokens generated |
+| `$event->usage['inputCost']` | `?string` | Input cost in USD |
+| `$event->usage['outputCost']` | `?string` | Output cost in USD |
+| `$event->usage['totalCost']` | `?string` | Total cost in USD |
+| `$event->usage['llmCalls']` | `int` | Number of LLM API calls made |
+| `$event->usage['primaryModel']` | `?string` | Main LLM model used |
+| `$event->usage['generationTimeMs']` | `int` | Total processing time in milliseconds |
 
 ## Requirements
 
