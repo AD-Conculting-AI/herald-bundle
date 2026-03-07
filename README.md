@@ -70,20 +70,35 @@ herald:
 
 Inject `HeraldClient` and call `sendMessage()`. The call returns immediately with a conversation ID.
 
+Here is a real-world example: a customer sends an email to your support address, your app retrieves relevant customer data from your database, and forwards everything to Herald.
+
 ```php
 use Herald\Bundle\Client\HeraldClient;
 
-final readonly class MyService
+final readonly class SupportEmailHandler
 {
     public function __construct(
         private HeraldClient $heraldClient,
+        private CustomerRepository $customers,
     ) {}
 
-    public function ask(string $question): string
+    public function handle(IncomingEmail $email): string
     {
+        $customer = $this->customers->findByEmail($email->from);
+
         $response = $this->heraldClient->sendMessage(
             endpointId: 'your-endpoint-id',
-            message: $question,
+            message: $email->body,
+            systemMessages: [                          // RAG context injected into the AI conversation
+                "Customer: {$customer->name}",
+                "Plan: {$customer->plan}",
+                "Open tickets: {$customer->openTicketCount}",
+                "Last order: {$customer->lastOrder->reference} ({$customer->lastOrder->status})",
+            ],
+            metadata: [                                // Returned as-is in webhooks
+                'emailId' => $email->id,
+                'customerId' => $customer->id,
+            ],
         );
 
         // Save this ID to match with the webhook response later
@@ -92,25 +107,8 @@ final readonly class MyService
 }
 ```
 
-You can also pass **context** and **tracking data**:
-
-```php
-$response = $this->heraldClient->sendMessage(
-    endpointId: 'your-endpoint-id',
-    message: 'How can I help you?',
-    systemMessages: [                          // Injected into the AI context
-        'You are a support agent for Acme Corp.',
-        'The customer is on the Pro plan.',
-    ],
-    metadata: [                                // Returned as-is in webhooks
-        'userId' => 'user-123',
-        'source' => 'chat-widget',
-    ],
-);
-```
-
-- **systemMessages**: additional instructions injected into the AI conversation (e.g., user context, business rules)
-- **metadata**: arbitrary key-value data attached to the conversation. Herald does not read it — it simply passes it back in every webhook, so you can correlate responses with your own data.
+- **systemMessages**: context from your database injected into the AI conversation. Use it to pass customer data, order history, account status — anything that helps the agents answer accurately.
+- **metadata**: arbitrary key-value data attached to the conversation. Herald does not read it — it simply passes it back in every webhook, so you can correlate responses with your own records.
 
 ### 2. Receive the AI response
 
@@ -121,20 +119,31 @@ use Herald\Bundle\Event\HeraldResponseReceivedEvent;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 
 #[AsEventListener]
-final readonly class HeraldListener
+final readonly class SupportResponseListener
 {
+    public function __construct(
+        private TicketRepository $tickets,
+        private Mailer $mailer,
+    ) {}
+
     public function __invoke(HeraldResponseReceivedEvent $event): void
     {
-        // The AI finished processing — here is the response
+        // The AI finished processing — send the reply to the customer
         if ($event->event === 'conversation.completed') {
-            $aiResponse    = $event->response;              // "Here is how I can help..."
-            $conversationId = $event->conversationId;       // Match with your original request
-            $userId        = $event->metadata['userId'];    // Your metadata, passed back as-is
+            $emailId = $event->metadata['emailId'];         // Your metadata, passed back as-is
+
+            $this->mailer->reply(
+                inReplyTo: $emailId,
+                body: $event->response,                     // AI-generated support answer
+            );
         }
 
-        // Something went wrong
+        // Something went wrong — create a ticket for manual handling
         if ($event->event === 'conversation.failed') {
-            $reason = $event->failureReason;                // "Rate limit exceeded"
+            $this->tickets->create(
+                emailId: $event->metadata['emailId'],
+                reason: $event->failureReason,
+            );
         }
     }
 }
