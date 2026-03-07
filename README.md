@@ -1,5 +1,7 @@
 # Herald Bundle for Symfony
 
+> **Beta** — This bundle is under active development. The API may change before the 1.0 release.
+
 Official Symfony bundle for [Herald](https://herald-ai.net), the multi-agent orchestration engine.
 
 ## How it works
@@ -32,8 +34,23 @@ Herald processes messages **asynchronously**. Your app sends a message, gets a c
 
 ## Installation
 
+Add the repository to your `composer.json`:
+
+```json
+{
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/AD-Conculting-AI/herald-bundle"
+        }
+    ]
+}
+```
+
+Then install the bundle:
+
 ```bash
-composer require herald-ai/herald-bundle
+composer require herald-ai/herald-bundle:dev-main
 ```
 
 ## Configuration
