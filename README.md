@@ -8,6 +8,7 @@ Official Symfony bundle for [Herald](https://herald-ai.net), the multi-agent orc
 sequenceDiagram
     participant App as Your App
     participant Herald
+    participant Team as Your Team
 
     App->>Herald: sendMessage("How can I help?")
     Herald-->>App: conversationId
@@ -15,6 +16,15 @@ sequenceDiagram
     Note over Herald: Agents process the message asynchronously
 
     Herald--)App: webhook: conversation.started
+
+    rect rgb(60, 40, 0)
+        Note over Herald,Team: Human-in-the-loop (can repeat multiple times)
+        Herald--)App: webhook: conversation.paused
+        Herald--)Team: Notification (email / inbox)
+        Team->>Herald: Answer
+        Herald--)App: webhook: conversation.resumed
+    end
+
     Herald--)App: webhook: conversation.completed + AI response
 ```
 
@@ -123,10 +133,10 @@ Herald sends 5 different events during a conversation lifecycle. You will typica
 flowchart TD
     A[sendMessage] --> B[conversation.started]
     B --> C{Agent needs human help?}
-    C -- No --> F
+    C -- No --> F{Processing result}
     C -- Yes --> D[conversation.paused]
     D -- Team member answers --> E[conversation.resumed]
-    E --> F{Processing result}
+    E -- Agents continue --> C
     F -- Success --> G[conversation.completed]
     F -- Error --> H[conversation.failed]
 
