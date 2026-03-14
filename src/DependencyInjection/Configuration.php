@@ -24,6 +24,10 @@ final class Configuration implements ConfigurationInterface
                 ->booleanNode('verify_peer')
                     ->defaultTrue()
                 ->end()
+                ->scalarNode('webhook_secret')
+                    ->defaultValue('')
+                    ->info('HMAC SHA-256 secret for verifying webhook signatures. Must match the secret configured in Herald outbound settings.')
+                ->end()
             ->end();
 
         return $treeBuilder;

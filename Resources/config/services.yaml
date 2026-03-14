@@ -8,3 +8,8 @@ services:
       $heraldApiUrl: '%herald.api_url%'
       $heraldApiKey: '%herald.api_key%'
       $heraldVerifyPeer: '%herald.verify_peer%'
+
+  Herald\Bundle\Controller\WebhookController:
+    arguments:
+      $heraldWebhookSecret: '%herald.webhook_secret%'
+    tags: ['controller.service_arguments']
