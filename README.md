@@ -263,7 +263,7 @@ if ($event->event === 'conversation.failed') {
 | `$event->nodeId` | All events | Which agent node triggered this event |
 | `$event->stackId` | All events | Your agent stack ID |
 | `$event->stackName` | All events | Your agent stack name |
-| `$event->status` | All events | Conversation status (`pending`, `paused`, `completed`, `failed`) |
+| `$event->status` | All events | Conversation status (`active`, `paused`, `completed`, `failed`) |
 | `$event->metadata` | All events | Your metadata from `sendMessage()`, returned as-is |
 | `$event->response` | `completed` | The AI-generated response |
 | `$event->failureReason` | `failed` | Why processing failed |
