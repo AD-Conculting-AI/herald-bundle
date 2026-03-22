@@ -20,8 +20,8 @@ final readonly class HeraldResponseReceivedEvent
 
     /**
      * @param string $conversationId Herald conversation ID
-     * @param string $status Conversation status (active, paused, completed, failed) — NOT the event type
-     * @param string $event Webhook event type (conversation.started, conversation.paused, etc.)
+     * @param string $status Conversation status (active, paused, completed, failed, cancelled) — NOT the event type
+     * @param string $event Webhook event type (conversation.started, conversation.paused, conversation.completed, conversation.failed, conversation.cancelled, conversation.llm_retried, conversation.llm_failed)
      * @param array<string, mixed> $metadata Client metadata passée par le tiers (ex: inboundEmailId)
      * @param array{inputTokens: int, outputTokens: int, inputCost: ?string, outputCost: ?string, totalCost: ?string, llmCalls: int, primaryModel: ?string, generationTimeMs: int} $usage
      */

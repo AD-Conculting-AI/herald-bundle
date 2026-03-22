@@ -28,6 +28,11 @@ sequenceDiagram
     end
 
     Herald--)App: webhook: conversation.completed + AI response
+
+    Note over App,Herald: User can interrupt at any time
+    App->>Herald: cancelConversation()
+    Herald--)App: webhook: conversation.cancelled
+    Note over Herald: Agents stop — resumable with a new message
 ```
 
 Herald processes messages **asynchronously**. Your app sends a message, gets a conversation ID back instantly, and then receives updates via webhooks as the AI agents work.
@@ -164,7 +169,7 @@ final readonly class SupportResponseListener
 
 ## Webhook events reference
 
-Herald sends 5 different events during a conversation lifecycle. You will typically only need to handle `completed` and `failed`.
+Herald sends 6 different events during a conversation lifecycle. You will typically only need to handle `completed` and `failed`.
 
 ### Lifecycle overview
 
@@ -178,6 +183,8 @@ flowchart TD
     E -- Agents continue --> C
     F -- Success --> G[conversation.completed]
     F -- Error --> H[conversation.failed]
+    B -- User interrupts --> I[conversation.cancelled]
+    I -- New message --> B
 
     style A fill:#312e81,color:#fff
     style B fill:#1e3a5f,color:#fff
@@ -185,6 +192,7 @@ flowchart TD
     style E fill:#1e3a5f,color:#fff
     style G fill:#065f46,color:#fff
     style H fill:#991b1b,color:#fff
+    style I fill:#92400e,color:#fff
 ```
 
 ### Events detail
@@ -254,6 +262,17 @@ if ($event->event === 'conversation.failed') {
 }
 ```
 
+#### `conversation.cancelled`
+
+The user interrupted the conversation. All agents stop processing. The conversation can be resumed by sending a new message.
+
+```php
+if ($event->event === 'conversation.cancelled') {
+    // You can update your UI: "Conversation interrupted"
+    $conversationId = $event->conversationId;
+}
+```
+
 ### All event fields
 
 | Field | Available in | Description |
@@ -263,7 +282,7 @@ if ($event->event === 'conversation.failed') {
 | `$event->nodeId` | All events | Which agent node triggered this event |
 | `$event->stackId` | All events | Your agent stack ID |
 | `$event->stackName` | All events | Your agent stack name |
-| `$event->status` | All events | Conversation status (`active`, `paused`, `completed`, `failed`) |
+| `$event->status` | All events | Conversation status (`active`, `paused`, `completed`, `failed`, `cancelled`) |
 | `$event->metadata` | All events | Your metadata from `sendMessage()`, returned as-is |
 | `$event->response` | `completed` | The AI-generated response |
 | `$event->failureReason` | `failed` | Why processing failed |
