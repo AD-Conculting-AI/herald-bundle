@@ -1,3 +1,0 @@
-herald_webhook:
-  resource: '@HeraldBundle/src/Controller/'
-  type: attribute

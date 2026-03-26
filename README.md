@@ -70,17 +70,19 @@ herald:
   webhook_secret: '%env(HERALD_WEBHOOK_SECRET)%'   # Must match the secret in Herald outbound settings
 ```
 
-Import the bundle routes so the webhook endpoint is registered:
+Register the webhook route in your application:
 
 ```yaml
 # config/routes/herald.yaml
-herald:
-  resource: '@HeraldBundle/Resources/config/routes.yaml'
+herald_webhook:
+    path: /webhook/herald          # Choose your own path
+    controller: Herald\Bundle\Controller\WebhookController
+    methods: [POST]
 ```
 
-The bundle registers a webhook endpoint at `POST /herald/webhook` that automatically receives Herald callbacks, verifies the HMAC signature, and dispatches `HeraldResponseReceivedEvent` into your Symfony event dispatcher.
+This route receives Herald callbacks, verifies the HMAC signature, and dispatches `HeraldResponseReceivedEvent` into your Symfony event dispatcher.
 
-> **Note**: Set the webhook URL in your Herald outbound settings to `https://your-app.com/herald/webhook` and use the same secret for both `HERALD_WEBHOOK_SECRET` and the Herald outbound configuration.
+> **Note**: Set the webhook URL in your Herald outbound settings to `https://your-app.com/webhook/herald` (matching the path above) and use the same secret for both `HERALD_WEBHOOK_SECRET` and the Herald outbound configuration.
 
 ## Quick start
 

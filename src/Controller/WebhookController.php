@@ -10,7 +10,6 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\AsController;
-use Symfony\Component\Routing\Attribute\Route;
 
 #[AsController]
 final readonly class WebhookController
@@ -21,7 +20,6 @@ final readonly class WebhookController
     ) {
     }
 
-    #[Route('/herald/webhook', name: 'herald_webhook', methods: ['POST'])]
     public function __invoke(Request $request): JsonResponse
     {
         $body = (string) $request->getContent();
