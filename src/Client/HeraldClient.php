@@ -83,4 +83,35 @@ final readonly class HeraldClient
             status: \is_string($data['status'] ?? null) ? $data['status'] : 'unknown',
         );
     }
+
+    public function cancelConversation(string $conversationId): void
+    {
+        $options = [
+            'headers' => [
+                'X-Api-Key' => $this->heraldApiKey,
+                'Content-Type' => 'application/json',
+            ],
+        ];
+
+        if (!$this->heraldVerifyPeer) {
+            $options['verify_peer'] = false;
+            $options['verify_host'] = false;
+        }
+
+        $response = $this->httpClient->request('POST', sprintf(
+            '%s/public/api/v1/conversations/%s/cancel',
+            rtrim($this->heraldApiUrl, '/'),
+            $conversationId,
+        ), $options);
+
+        $statusCode = $response->getStatusCode();
+
+        if ($statusCode < 200 || $statusCode >= 300) {
+            throw new HeraldApiException(sprintf(
+                'Herald API cancel returned HTTP %d: %s',
+                $statusCode,
+                $response->getContent(false),
+            ), $statusCode);
+        }
+    }
 }
